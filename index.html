@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>DocVision AI - 智能文档识别</title>
+	<link rel="stylesheet" href="./styles.css" />
+	<!-- 外部库（CDN） -->
+	<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+	<script async src="https://docs.opencv.org/4.x/opencv.js" type="text/javascript"></script>
+	<script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
+</head>
+<body>
+	<!-- 顶部页眉（恢复）：保留导航与设置按钮，但页面主标题已移除 -->
+	<header class="top-nav">
+		<div class="nav-left">
+			<div class="logo">DocVision AI</div>
+			<nav class="nav-links">
+				<a href="#hero">首页</a>
+				<a href="#features">功能</a>
+				<a href="#steps">使用方法</a>
+			</nav>
+		</div>
+		<div class="nav-actions">
+			<button id="btn-open-settings" class="btn ghost">设置</button>
+		</div>
+	</header>
+
+	<main>
+		<!-- 标题区已删除（保留页眉/导航），页面直接显示三列主视图 -->
+
+		<!-- Immediate view: 页面打开时完整可见的四个区域（标题 + 三列） -->
+		<section class="immediate-view" aria-label="主视图">
+			<!-- 左：功能区 -->
+			<aside class="func-area card">
+				<div class="control-panel">
+					<div class="panel-group">
+						<h3>上传与基本操作</h3>
+						<div class="tool-row">
+							<button id="hero-upload" class="btn btn-primary">上传文件</button>
+							<button id="btn-load-sample" class="btn ghost">加载示例</button>
+						</div>
+						<div class="tool-row" style="margin-top:8px;">
+							<button id="btn-clear" class="btn ghost">清空工作区</button>
+							<button id="btn-reset-image" class="btn ghost">还原原图</button>
+						</div>
+					</div>
+
+					<div class="panel-group">
+						<h3>旋转与镜像</h3>
+						<div class="tool-row">
+							<button id="btn-rotate-left" class="btn ghost">左旋90°</button>
+							<button id="btn-rotate-right" class="btn ghost">右旋90°</button>
+							<div class="angle-slider">
+								<label for="rotate-range">角度</label>
+								<input id="rotate-range" type="range" min="-180" max="180" step="0.1" value="0" />
+								<input id="rotate-input" type="number" step="0.1" value="0" />
+								<span>°</span>
+							</div>
+							<button id="btn-flip-h" class="btn ghost">水平翻转</button>
+							<button id="btn-flip-v" class="btn ghost">垂直翻转</button>
+							<button id="btn-zoom-in" class="btn ghost">放大</button>
+							<button id="btn-zoom-out" class="btn ghost">缩小</button>
+						</div>
+					</div>
+
+					<div class="panel-group">
+						<h3>区域工具</h3>
+						<div class="tool-row">
+							<button id="btn-select-rect" class="btn ghost">矩形框选</button>
+							<button id="btn-select-lasso" class="btn ghost">自由框选</button>
+							<button id="btn-perspective-mode" class="btn ghost">四点矫正</button>
+							<button id="btn-auto-correct" class="btn btn-success">自动矫正</button>
+							<button id="btn-apply-crop" class="btn btn-primary">应用裁剪/矫正</button>
+						</div>
+					</div>
+
+					<div class="panel-group">
+						<h3>识别</h3>
+						<div class="tool-row">
+							<button id="btn-ocr-local" class="btn btn-primary">本地识别（中英）</button>
+							<button id="btn-ocr-ai" class="btn btn-primary">AI识别</button>
+						</div>
+					</div>
+
+					<div class="panel-group">
+						<h3>导出</h3>
+						<div class="tool-row">
+							<button id="btn-export-txt" class="btn ghost">导出 TXT</button>
+							<button id="btn-export-docx" class="btn ghost">导出 Word</button>
+						</div>
+					</div>
+				</div>
+			</aside>
+
+			<!-- 中：图像区 -->
+			<section class="image-area card">
+				<div class="canvas-panel">
+					<div class="canvas-header">
+						<div class="card-title">图像工作区</div>
+					</div>
+					<div class="upload-drop" id="upload-drop">
+						<input id="file-input" type="file" accept="image/*" hidden />
+						<div class="upload-icon">☁</div>
+						<p>点击或拖拽上传图片，支持表格与票据</p>
+					</div>
+					<div class="canvas-shell">
+						<canvas id="canvas" width="1280" height="900"></canvas>
+						<canvas id="overlay" width="1280" height="900"></canvas>
+					</div>
+					<div class="step-bar">
+						<span>1 上传</span>
+						<span>2 选取</span>
+						<span>3 矫正</span>
+						<span>4 识别</span>
+					</div>
+					<div id="status" class="status"></div>
+				</div>
+			</section>
+
+			<!-- 右：结果区（上下各半：本地 / AI） -->
+			<aside class="result-area">
+				<div class="result-local card">
+					<div class="card-header">
+						<div class="card-title">识别结果（本地）</div>
+						<div class="card-actions">
+							<button id="btn-copy" class="btn ghost">复制</button>
+							<button id="btn-clear-result" class="btn ghost">清空</button>
+						</div>
+					</div>
+					<textarea id="result-text" placeholder="识别结果将在这里显示"></textarea>
+				</div>
+
+				<div class="result-ai card">
+					<div class="card-header">
+						<div class="card-title">AI 处理</div>
+					</div>
+					<div class="tool-row">
+						<button id="btn-translate-zh" class="btn btn-success">翻译为中文</button>
+						<button id="btn-extract-questions" class="btn btn-success">识别为题目</button>
+					</div>
+					<textarea id="result-text-post" placeholder="AI处理结果将在这里显示"></textarea>
+				</div>
+			</aside>
+		</section>
+
+		<section id="features" class="feature-section">
+			<h2>强大功能</h2>
+			<div class="feature-grid">
+				<div class="feature-card">
+					<h3>相机实时扫描</h3>
+					<p>支持前后摄像头切换，实时预览与拍摄，智能识别各种文档类型。</p>
+				</div>
+				<div class="feature-card">
+					<h3>多语言 OCR</h3>
+					<p>支持中英文混合识别，识别准确率高，自动优化文本和表格排版。</p>
+				</div>
+				<div class="feature-card">
+					<h3>智能文本纠错</h3>
+					<p>自动识别并纠正常见错误，显著提升识别结果质量。</p>
+				</div>
+			</div>
+		</section>
+
+		<section id="steps" class="step-section">
+			<h2>使用步骤</h2>
+			<div class="step-grid">
+				<div class="step-card">
+					<div class="step-index">1</div>
+					<h3>启动扫描</h3>
+					<p>上传文档或启用摄像头，将文档置于取景框内。</p>
+				</div>
+				<div class="step-card">
+					<div class="step-index">2</div>
+					<h3>拍摄文档</h3>
+					<p>对齐文档边缘，减少光斑与阴影，点击拍摄。</p>
+				</div>
+				<div class="step-card">
+					<div class="step-index">3</div>
+					<h3>调整图像</h3>
+					<p>使用旋转、框选与矫正工具获得正视图像。</p>
+				</div>
+				<div class="step-card">
+					<div class="step-index">4</div>
+					<h3>开始识别</h3>
+					<p>点击“本地识别”或“AI识别”，自动复制识别结果。</p>
+				</div>
+			</div>
+		</section>
+
+		<footer class="page-footer">
+			<div class="footer-brand">DocVision AI</div>
+			<div class="footer-desc">智能文档识别系统，让文档数字化变得简单高效。</div>
+			<div class="footer-links">
+				<a href="#hero">首页</a>
+				<a href="#features">功能</a>
+				<a href="#steps">使用方法</a>
+				<a href="mailto:contact@docvision.ai">联系</a>
+			</div>
+			<div class="footer-meta">© 2025 DocVision AI. 保留所有权利。</div>
+		</footer>
+	</main>
+
+	<div id="settings-modal" class="modal hidden">
+		<div class="modal-content">
+			<div class="modal-header">
+				<h3>设置</h3>
+				<button id="btn-close-settings" class="btn btn-icon" aria-label="close">✕</button>
+			</div>
+			<div class="modal-body">
+				<div class="form-field">
+					<label for="theme-select">主题</label>
+					<select id="theme-select">
+						<option value="dark">黑夜模式</option>
+						<option value="light">白天模式</option>
+					</select>
+				</div>
+			</div>
+			<div class="modal-footer">
+				<button id="btn-save-settings" class="btn btn-primary">保存</button>
+			</div>
+		</div>
+	</div>
+
+	<script src="./app.js"></script>
+</body>
+</html>
+
+
